@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Playlist Sincronizada</title>
+  <style>
+    body { font-family: sans-serif; background: #f0f0f0; margin: 0; padding: 20px; }
+    #player { width: 100%; height: 300px; margin-bottom: 20px; }
+    #playlist { display: flex; flex-direction: column; gap: 10px; }
+    .video-item { display: flex; align-items: center; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; }
+    .thumbnail { width: 120px; height: 90px; object-fit: cover; margin-right: 10px; }
+    .title { flex-grow: 1; }
+    .remove { cursor: pointer; color: red; font-weight: bold; }
+    #add-form { display: flex; margin-bottom: 20px; }
+    #add-form input { flex-grow: 1; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px 0 0 4px; }
+    #add-form button { padding: 10px 15px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 0 4px 4px 0; cursor: pointer; }
+    #add-form button:hover { background-color: #0056b3; }
+  </style>
+</head>
+<body>
+  <h1>Playlist Sincronizada</h1>
+
+  <form id="add-form">
+    <input type="text" id="youtube-link" placeholder="Cole o link do YouTube aqui" required>
+    <button type="submit">Adicionar</button>
+  </form>
+
+  <div id="player"></div>
+  <div id="playlist"></div>
+
+  <script>
+    const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo';
+    const playlistTable = 'videos';
+    const syncTable = 'sync';
+    let currentVideo = null;
+    let player;
+    let updateInterval;
+
+    const fetchVideos = async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${playlistTable}?select=*`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      return res.json();
+    };
+
+    const fetchVideoTitle = async (videoId) => {
+      try {
+        const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
+        const data = await res.json();
+        return data.title || videoId;
+      } catch (error) {
+        console.error('Erro ao buscar título:', error);
+        return videoId;
+      }
+    };
+
+    const insertVideo = async (youtube_id) => {
+      const title = await fetchVideoTitle(youtube_id);
+      await fetch(`${supabaseUrl}/rest/v1/${playlistTable}`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ youtube_id, title })
+      });
+      loadPlaylist();
+    };
+
+    const deleteVideo = async (id) => {
+      await fetch(`${supabaseUrl}/rest/v1/${playlistTable}?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      loadPlaylist();
+    };
+
+    const updateSync = async (videoId, currentTime) => {
+      await fetch(`${supabaseUrl}/rest/v1/${syncTable}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id: 1, video_id: videoId, timestamp: currentTime })
+      });
+    };
+
+    const getSync = async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      return (await res.json())[0];
+    };
+
+    function loadInitialVideo(sync) {
+      if (!sync || !sync.video_id) {
+        console.warn('Nenhum vídeo sincronizado encontrado.');
+        return;
+      }
+
+      try {
+        player.loadVideoById({ videoId: sync.video_id, startSeconds: sync.timestamp || 0 });
+        currentVideo = sync.video_id;
+      } catch (e) {
+        console.error('Erro ao carregar vídeo:', e);
+      }
+    }
+
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('player', {
+        height: '300',
+        width: '100%',
+        videoId: '',
+        playerVars: { 'rel': 0, 'autoplay': 0, 'modestbranding': 1, 'origin': location.origin },
+        events: {
+          'onReady': async () => {
+            try {
+              const sync = await getSync();
+              loadInitialVideo(sync);
+            } catch (e) {
+              console.error('Erro na função onReady:', e);
+            }
+          },
+          'onStateChange': (event) => {
+            if (event.data == YT.PlayerState.PLAYING) {
+              clearInterval(updateInterval);
+              updateInterval = setInterval(async () => {
+                try {
+                  const time = player.getCurrentTime();
+                  await updateSync(currentVideo, time);
+                } catch (e) {
+                  console.error('Erro ao atualizar sincronização:', e);
+                }
+              }, 5000);
+            } else {
+              clearInterval(updateInterval);
+            }
+          },
+          'onError': (error) => {
+            console.error('Erro no player do YouTube:', error);
+          }
+        }
+      });
+    }
+
+    const loadPlaylist = async () => {
+      const videos = await fetchVideos();
+      const container = document.getElementById('playlist');
+      container.innerHTML = '';
+
+      videos.forEach(video => {
+        const item = document.createElement('div');
+        item.className = 'video-item';
+
+        const thumbnail = document.createElement('img');
+        thumbnail.src = `https://img.youtube.com/vi/${video.youtube_id}/default.jpg`;
+        thumbnail.className = 'thumbnail';
+
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.innerText = video.title || video.youtube_id;
+
+        const remove = document.createElement('div');
+        remove.className = 'remove';
+        remove.innerText = '✖';
+        remove.onclick = () => {
+          if (confirm(`Deseja remover "${video.title}" da playlist?`)) {
+            deleteVideo(video.id);
+          }
+        };
+
+        thumbnail.onclick = title.onclick = () => {
+          try {
+            currentVideo = video.youtube_id;
+            player.loadVideoById({ videoId: currentVideo });
+            updateSync(currentVideo, 0);
+          } catch (e) {
+            console.error('Erro ao tentar carregar vídeo clicado:', e);
+          }
+        };
+
+        item.appendChild(thumbnail);
+        item.appendChild(title);
+        item.appendChild(remove);
+
+        container.appendChild(item);
+      });
+    };
+
+    setInterval(async () => {
+      try {
+        const sync = await getSync();
+        if (sync && sync.video_id !== currentVideo) {
+          currentVideo = sync.video_id;
+          player.loadVideoById({ videoId: currentVideo, startSeconds: sync.timestamp });
+        }
+      } catch (e) {
+        console.error('Erro no sincronismo periódico:', e);
+      }
+    }, 3000);
+
+    document.getElementById('add-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const url = document.getElementById('youtube-link').value;
+      const match = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
+      if (match) {
+        insertVideo(match[1]);
+        document.getElementById('youtube-link').value = '';
+      } else {
+        alert('Link inválido.');
+      }
+    });
+
+    loadPlaylist();
+  </script>
+  <script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
