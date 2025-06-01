@@ -111,17 +111,6 @@
   </form>
   <div id="playlist"></div>
   <script>
-         function atualizarConteudo() {
-            // Conteúdo a ser atualizado (ex: buscar dados de um servidor)
-            const novoConteudo = "Novo conteúdo aqui!";
-            document.getElementById('conteudo').innerHTML = novoConteudo;
-
-            // Caso você tenha um iframe com vídeo YouTube, pode manter a reprodução
-
-        }
-
-        setInterval(atualizarConteudo, 5000); // Atualiza a cada 5 segundos (5000ms)
-
     const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo'; // substitua com a chave real
     const playlistTable = 'videos';
@@ -318,6 +307,7 @@
             clientY: rect.top + rect.height / 2
           });
           target.dispatchEvent(clickEvent);
+          http-equiv="refresh" content="5"
         }
       }, 5000);
     };
