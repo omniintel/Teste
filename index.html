@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>OmniPlayer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+      padding: 20px;
+    }
+    #player-wrapper {
+      position: relative;
+      width: 100%;
+      height: 300px;
+      background: #000;
+      margin-bottom: 20px;
+    }
+    #player {
+      width: 100%;
+      height: 100%;
+    }
+    #autoplay-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #00c3ff;
+      border: none;
+      padding: 15px 25px;
+      font-size: 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: none;
+      z-index: 10;
+    }
+    #toggle-autoclick {
+      margin-top: 10px;
+      padding: 10px 20px;
+      background: #ff0066;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #add-form {
+      margin-bottom: 20px;
+    }
+    #add-form input {
+      padding: 10px;
+      width: 60%;
+      border: none;
+      border-radius: 5px;
+    }
+    #add-form button {
+      padding: 10px 20px;
+      border: none;
+      background: #00c3ff;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #playlist {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .video-item {
+      background: #222;
+      padding: 10px;
+      border-radius: 8px;
+      width: 150px;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .video-item:hover {
+      transform: scale(1.03);
+    }
+    .thumbnail {
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .title {
+      margin-top: 5px;
+      font-size: 14px;
+      color: #ddd;
+    }
+    .remove {
+      position: absolute;
+      top: 5px;
+      right: 8px;
+      color: red;
+      cursor: pointer;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎮 OmniPlayer</h1>
+  <div id="player-wrapper">
+    <button id="autoplay-btn">▶ Iniciar</button>
+    <div id="player"></div>
+  </div>
+  <button id="toggle-autoclick">🔁 Ativar Sincronia</button>
+  <form id="add-form">
+    <input type="text" id="youtube-link" placeholder="Cole o link do YouTube aqui" required>
+    <button type="submit">Adicionar</button>
+  </form>
+  <div id="playlist"></div>
+  <script>
+    const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo'; // substitua com a chave real
+    const playlistTable = 'videos';
+    const syncTable = 'current_video';
+
+    let playlist = [];
+    let currentIndex = 0;
+    let currentVideoId = '';
+    let player = null;
+    let autoclickInterval = null;
+    let lastAutoClickStatus = null;
+
+    const generateEmbedUrl = (url) => {
+      const match = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
+      return match ? `https://www.youtube.com/embed/${match[1]}?enablejsapi=1&rel=0&controls=0&autoplay=1` : null;
+    };
+
+    const fetchVideos = async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${playlistTable}?select=*`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      return res.ok ? await res.json() : [];
+    };
+
+    const insertVideo = async (youtubeUrl) => {
+      const embedUrl = generateEmbedUrl(youtubeUrl);
+      if (!embedUrl) return alert('Link inválido.');
+      const videoId = embedUrl.split('/embed/')[1].split('?')[0];
+      const title = await fetchVideoTitle(videoId);
+      await fetch(`${supabaseUrl}/rest/v1/${playlistTable}`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ youtube_id: embedUrl, title })
+      });
+      await loadPlaylist();
+    };
+
+    const deleteVideo = async (id) => {
+      await fetch(`${supabaseUrl}/rest/v1/${playlistTable}?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      await loadPlaylist();
+    };
+
+    const fetchVideoTitle = async (videoId) => {
+      try {
+        const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+        const data = await res.json();
+        return data.title;
+      } catch {
+        return 'Vídeo do YouTube';
+      }
+    };
+
+    const loadPlaylist = async () => {
+      playlist = await fetchVideos();
+      playlist.sort((a, b) => a.id - b.id);
+      const container = document.getElementById('playlist');
+      container.innerHTML = '';
+      playlist.forEach((video, index) => {
+        const item = document.createElement('div');
+        item.className = 'video-item';
+
+        const youtubeId = video.youtube_id.split('/embed/')[1]?.split('?')[0];
+
+        const thumbnail = document.createElement('img');
+        thumbnail.src = `https://img.youtube.com/vi/${youtubeId}/default.jpg`;
+        thumbnail.className = 'thumbnail';
+
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.innerText = video.title || 'Vídeo';
+
+        const remove = document.createElement('div');
+        remove.className = 'remove';
+        remove.innerText = '✖';
+        remove.onclick = (e) => {
+          e.stopPropagation();
+          if (confirm(`Remover "${video.title}" da playlist?`)) deleteVideo(video.id);
+        };
+
+        item.onclick = () => {
+          currentIndex = index;
+          playVideo(playlist[currentIndex].youtube_id);
+        };
+
+        item.appendChild(thumbnail);
+        item.appendChild(title);
+        item.appendChild(remove);
+        container.appendChild(item);
+      });
+      if (playlist.length > 0) startAutoplayWithDelay();
+    };
+
+    const startAutoplayWithDelay = () => {
+      const btn = document.getElementById('autoplay-btn');
+      btn.style.display = 'block';
+      btn.onclick = () => {
+        btn.style.display = 'none';
+        currentIndex = 0;
+        playVideo(playlist[0].youtube_id);
+      };
+      setTimeout(() => {
+        btn.click();
+      }, 10000);
+    };
+
+    const playVideo = async (embedUrl) => {
+      const videoId = embedUrl.split('/embed/')[1].split('?')[0];
+      currentVideoId = videoId;
+
+      const iframe = document.createElement('iframe');
+      iframe.id = 'ytplayer';
+      iframe.src = `${embedUrl}&enablejsapi=1`;
+      iframe.frameBorder = 0;
+      iframe.allow = 'autoplay; encrypted-media';
+      iframe.allowFullscreen = true;
+      iframe.width = '100%';
+      iframe.height = '100%';
+
+      const playerDiv = document.getElementById('player');
+      playerDiv.innerHTML = '';
+      playerDiv.appendChild(iframe);
+
+      player = new YT.Player('ytplayer', {
+        events: {
+          'onStateChange': onPlayerStateChange
+        }
+      });
+
+      await updateSyncTable(currentVideoId, currentIndex);
+    };
+
+    const onPlayerStateChange = (event) => {
+      if (event.data === YT.PlayerState.ENDED) {
+        currentIndex = (currentIndex + 1) % playlist.length;
+        playVideo(playlist[currentIndex].youtube_id);
+      }
+    };
+
+    const updateSyncTable = async (videoId, index) => {
+      await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ sync: videoId, syncid: index })
+      });
+    };
+
+    const checkCurrentSync = async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data[0]) return;
+
+      const remoteId = data[0].sync;
+      const remoteIndex = data[0].syncid;
+      if (remoteId && remoteId !== currentVideoId && playlist[remoteIndex]) {
+        currentIndex = remoteIndex;
+        playVideo(playlist[currentIndex].youtube_id);
+      }
+    };
+
+        const startAutoClicker = () => {
+      stopAutoClicker();
+      autoclickInterval = setInterval(() => {
+        const target = document.querySelector('.video-item .thumbnail');
+        if (target) {
+          const rect = target.getBoundingClientRect();
+          const clickEvent = new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2
+          });
+          target.dispatchEvent(clickEvent);
+        }
+      }, 5000);
+    };
+
+    const stopAutoClicker = () => {
+      if (autoclickInterval) {
+        clearInterval(autoclickInterval);
+        autoclickInterval = null;
+      }
+    };
+
+    const checkAutoClickStatus = async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      const data = await res.json();
+      const auto = data[0]?.Button || 0;
+      if (auto !== lastAutoClickStatus) {
+        lastAutoClickStatus = auto;
+        if (auto === 1) {
+          startAutoClicker();
+          document.getElementById('toggle-autoclick').innerText = "🔚 Desativar Sincronia";
+        } else {
+          stopAutoClicker();
+          document.getElementById('toggle-autoclick').innerText = "🔁 Ativar Sincronia";
+        }
+      }
+    };
+
+    const toggleAutoclickButton = async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      const data = await res.json();
+      const current = data[0]?.Button || 0;
+      const updated = current === 1 ? 0 : 1;
+      await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ Button: updated })
+      });
+      await checkAutoClickStatus();
+    };
+
+    document.getElementById('toggle-autoclick').addEventListener('click', toggleAutoclickButton);
+
+    document.getElementById('add-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const url = document.getElementById('youtube-link').value;
+      insertVideo(url);
+      document.getElementById('youtube-link').value = '';
+    });
+
+    const initYouTubeAPI = () => {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    };
+
+    initYouTubeAPI();
+
+    window.onload = async () => {
+      await loadPlaylist();
+      await checkAutoClickStatus();
+      setInterval(() => checkCurrentSync(), 1000);
+      setInterval(() => checkAutoClickStatus(), 5000);
+    };
+  </script>
+</body>
+</html>
