@@ -293,23 +293,24 @@
       }
     };
 
-        const startAutoClicker = () => {
-      stopAutoClicker();
-      autoclickInterval = setInterval(() => {
-        const target = document.querySelector('.video-item .thumbnail');
-        if (target) {
-          const rect = target.getBoundingClientRect();
-          const clickEvent = new MouseEvent('click', {
-            view: window,
-            bubbles: true,
-            cancelable: true,
-            clientX: rect.left + rect.width / 2,
-            clientY: rect.top + rect.height / 2
-          });
-          location.reload();
-        }
-      }, 5000);
-    };
+const startAutoClicker = () => {
+  stopAutoClicker();
+  autoclickInterval = setInterval(() => {
+    const target = document.querySelector('.video-item .thumbnail');
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      const clickEvent = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+      });
+      target.dispatchEvent(clickEvent);  // Clique acontece aqui
+      setTimeout(() => location.reload(), 100); // Aguarda 100ms antes de recarregar
+    }
+  }, 1000);
+};
 
     const stopAutoClicker = () => {
       if (autoclickInterval) {
