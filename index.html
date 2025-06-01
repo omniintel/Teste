@@ -307,9 +307,9 @@ const startAutoClicker = () => {
         clientY: rect.top + rect.height / 2
       });
       target.dispatchEvent(clickEvent);  // Clique acontece aqui
-      setTimeout(() => location.reload(), 100); // Aguarda 100ms antes de recarregar
+      setTimeout(() => location.reload(), 1000); // Aguarda 100ms antes de recarregar
     }
-  }, 1000);
+  }, 3000);
 };
 
     const stopAutoClicker = () => {
