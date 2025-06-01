@@ -112,6 +112,32 @@
   </form>
   <div id="playlist"></div>
   <script>
+    function atualizarPagina() {
+    // Faz a requisição HTTP GET para o mesmo URL
+    fetch(window.location.href)
+        .then(response => {
+            // Verifica se a requisição foi bem-sucedida
+            if (response.ok) {
+                // Obtém o conteúdo da página
+                return response.text();
+            } else {
+                throw new Error("Erro ao carregar a página.");
+            }
+        })
+        .then(html => {
+            // Substitui o conteúdo do corpo da página com o novo conteúdo
+            document.body.innerHTML = html;
+            // Adiciona qualquer lógica necessária para atualizar os elementos da página
+        })
+        .catch(error => {
+            // Lida com erros (se houver)
+            console.error("Erro ao atualizar a página:", error);
+        });
+}
+
+// Chama a função para atualizar a página após um determinado intervalo de tempo
+setInterval(atualizarPagina, 5000); // Atualiza a cada 5 segundos
+
     const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo'; // substitua com a chave real
     const playlistTable = 'videos';
