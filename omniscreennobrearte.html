@@ -275,6 +275,19 @@ let timeLeft = 0;
 let isPause = false;
 let countdownPlaying = false;
 
+  async function setPlayToZero() {
+  const { error } = await supabaseClient
+    .from('cronometro')
+    .update({ play: 0 })
+    .eq('id', timerData.id); // Certifique-se de que a tabela tenha uma coluna 'id' para identificar a linha correta
+
+  if (error) {
+    console.error('Erro ao atualizar play para 0:', error);
+  } else {
+    console.log('Timer desligado com sucesso (play = 0)');
+  }
+}
+
 async function fetchTimerData() {
   const { data, error } = await supabaseClient
     .from('cronometro')
