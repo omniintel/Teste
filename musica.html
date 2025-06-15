@@ -98,7 +98,7 @@
 <body>
   <h1>🎮 OmniPlayer</h1>
 
-  <button id="toggle-autoclick">🔁 Ativar Sincronia</button>
+  <button id="toggle-autoclick">🔁 Atualizar</button>
 
   <form id="add-form">
     <input type="text" id="youtube-link" placeholder="Cole o link do YouTube aqui" required>
@@ -212,7 +212,7 @@
           item.classList.add('current');
           const playingTag = document.createElement('div');
           playingTag.className = 'now-playing';
-          playingTag.textContent = 'Em Exibição';
+          playingTag.textContent = 'Reproduzindo';
           item.appendChild(playingTag);
         }
 
@@ -295,7 +295,7 @@
 
       await waitForReset();
 
-      alert('Sincronia atualizada!');
+      alert('Playlist atualizada!');
     };
 
     document.getElementById('toggle-autoclick').addEventListener('click', toggleSyncButton);
