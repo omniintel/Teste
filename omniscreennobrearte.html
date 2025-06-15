@@ -24,34 +24,65 @@
       max-height: 100vh;
       aspect-ratio: 16/9;
     }
-    #clockContainer, #weatherBox, #timerContainer {
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(6px);
-      border-radius: 1vw;
-      padding: 0.8vw 1.2vw;
-      text-align: center;
-    }
     #clockContainer {
       position: absolute;
       top: 1vh;
       left: 1vw;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 1.5vw;
+      backdrop-filter: blur(6px);
+      padding: 0.6vw 1vw;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    #dateText {
+      font-size: clamp(0.8rem, 1.5vw, 2rem);
+      margin-bottom: 0.5vw;
+    }
+    #timeText {
+      display: flex;
+      gap: 0.4vw;
+    }
+    .timeDigit {
+      width: clamp(25px, 3vw, 60px);
+      height: clamp(40px, 5vw, 90px);
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid rgba(255,255,255,0.3);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: clamp(1.4rem, 2vw, 3rem);
+      position: relative;
+      overflow: hidden;
+      perspective: 400px;
+    }
+    .flip {
+      animation: flipDown 0.5s ease-in-out;
+    }
+    @keyframes flipDown {
+      0% { transform: rotateX(-90deg); opacity: 0; }
+      100% { transform: rotateX(0deg); opacity: 1; }
     }
     #weatherBox {
       position: absolute;
       top: 1vh;
       right: 1vw;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(6px);
+      border-radius: 1.2vw;
+      padding: 0.8vw 1.2vw;
+      text-align: center;
       display: none;
     }
-    #timerContainer {
-      position: absolute;
-      bottom: 1vh;
-      left: 1vw;
-      font-size: clamp(1.2rem, 2vw, 3rem);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    #weatherBox .emoji {
+      font-size: clamp(0.8rem, 1.5vw, 2rem);
+      margin-bottom: 0.4vw;
+      white-space: nowrap;
     }
-    #timerDisplay {
+    #weatherBox .temperature {
+      font-size: clamp(1.4rem, 2.5vw, 3.5rem);
       font-weight: bold;
     }
     #cornerImage {
@@ -59,6 +90,23 @@
       bottom: 1vh;
       right: 1vw;
       width: clamp(50px, 8vw, 160px);
+    }
+    #timerContainer {
+      position: absolute;
+      bottom: 1vh;
+      left: 1vw;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(6px);
+      border-radius: 1vw;
+      padding: 0.8vw 1.2vw;
+      text-align: center;
+      font-size: clamp(1.2rem, 2vw, 3rem);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #timerDisplay {
+      font-weight: bold;
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
