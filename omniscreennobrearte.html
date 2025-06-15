@@ -149,8 +149,16 @@
     const { data } = await supabaseClient
       .from('cronometro')
       .select('*')
+      .eq('id', 1)
       .single();
     timerData = data;
+  }
+
+  async function setPlayToZero() {
+    await supabaseClient
+      .from('cronometro')
+      .update({ play: 0 })
+      .eq('id', 1);
   }
 
   function startTimer() {
@@ -184,6 +192,7 @@
         } else {
           stopTimer();
           playSound(endSound);
+          setPlayToZero(); // <-- Aqui faz o play virar 0 ao finalizar todos os circuitos
           setColorNormal();
           return;
         }
