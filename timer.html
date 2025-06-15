@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuração do Cronômetro</title>
+  <style>
+    body {
+      background-color: rgb(10, 10, 30);
+      color: white;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background-color: rgba(255, 255, 255, 0.05);
+      padding: 20px;
+      border-radius: 10px;
+      backdrop-filter: blur(5px);
+    }
+    button {
+      background-color: #0077ff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover {
+      background-color: #0055cc;
+    }
+    .config-item {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border-radius: 5px;
+      border: none;
+    }
+    .status {
+      margin-top: 10px;
+      color: lightgreen;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <h1>Configuração do Cronômetro</h1>
+  <div class="container">
+    <div class="config-item">
+      <label>Status do Cronômetro:</label>
+      <button id="playPauseBtn">Carregando...</button>
+    </div>
+
+    <div class="config-item">
+      <label>Circuitos (1 a 10):</label>
+<select id="circSelect">
+  <option value="1">1</option>
+  <option value="2">2</option>
+  <option value="3">3</option>
+  <option value="4">4</option>
+  <option value="5">5</option>
+  <option value="6">6</option>
+  <option value="7">7</option>
+  <option value="8">8</option>
+  <option value="9">9</option>
+  <option value="10">10</option>
+</select>
+    </div>
+
+    <div class="config-item">
+      <label>Pausa entre circuitos (centenas = minutos, decimais = segundos):</label>
+      <input type="number" id="pausInput" placeholder="Ex: 100 = 1 min ou 1.5 = 1.5 seg">
+    </div>
+
+    <div class="config-item">
+      <label>Alerta de Tempo Esgotado (centenas = minutos, decimais = segundos):</label>
+      <input type="number" id="minInput" placeholder="Ex: 100 = 1 min ou 1.5 = 1.5 seg">
+    </div>
+
+    <div class="config-item">
+      <label>Tempo Total do Temporizador (centenas = minutos, decimais = segundos):</label>
+      <input type="number" id="tempInput" placeholder="Ex: 100 = 1 min ou 1.5 = 1.5 seg">
+    </div>
+
+    <button id="saveBtn">Salvar Configurações</button>
+    <div class="status" id="statusMsg"></div>
+  </div>
+
+<script>
+  const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
+  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo';
+
+  const { createClient } = supabase;
+  const supabaseClient = createClient(supabaseUrl, supabaseKey);
+
+  const playPauseBtn = document.getElementById('playPauseBtn');
+  const circSelect = document.getElementById('circSelect');
+  const pausInput = document.getElementById('pausInput');
+  const minInput = document.getElementById('minInput');
+  const tempInput = document.getElementById('tempInput');
+  const statusMsg = document.getElementById('statusMsg');
+
+  let playState = 0;
+
+  async function loadConfig() {
+    const { data, error } = await supabaseClient
+      .from('cronometro')
+      .select('*')
+      .eq('id', 1) // <-- Define a linha a buscar
+      .single();
+
+    if (error) {
+      console.error('Erro ao carregar dados:', error);
+      statusMsg.textContent = 'Erro ao carregar dados.';
+      return;
+    }
+
+    playState = data.play;
+    updatePlayPauseButton();
+
+    circSelect.value = data.circ;
+    pausInput.value = revertValue(data.paus);
+    minInput.value = revertValue(data.min);
+    tempInput.value = revertValue(data.temp);
+  }
+
+  function revertValue(value) {
+    return value >= 60 ? (value / 60) * 100 : value;
+  }
+
+  function convertInput(value) {
+    if (value >= 100) {
+      return (value / 100) * 60;
+    } else {
+      return value;
+    }
+  }
+
+  function updatePlayPauseButton() {
+    playPauseBtn.textContent = playState === 1 ? 'Pause ⏸️' : 'Play ▶️';
+  }
+
+  playPauseBtn.addEventListener('click', async () => {
+    playState = playState === 1 ? 0 : 1;
+    const { error } = await supabaseClient
+      .from('cronometro')
+      .update({ play: playState })
+      .eq('id', 1);
+
+    if (error) {
+      console.error('Erro ao atualizar play/pause:', error);
+      statusMsg.textContent = 'Erro ao atualizar play/pause.';
+    } else {
+      updatePlayPauseButton();
+      statusMsg.textContent = 'Status atualizado com sucesso.';
+    }
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    const newConfig = {
+      circ: parseInt(circSelect.value),
+      paus: convertInput(parseFloat(pausInput.value)),
+      min: convertInput(parseFloat(minInput.value)),
+      temp: convertInput(parseFloat(tempInput.value))
+    };
+
+    const { error } = await supabaseClient
+      .from('cronometro')
+      .update(newConfig)
+      .eq('id', 1);
+
+    if (error) {
+      console.error('Erro ao salvar configurações:', error);
+      statusMsg.textContent = 'Erro ao salvar configurações.';
+    } else {
+      statusMsg.textContent = 'Configurações salvas com sucesso!';
+    }
+  });
+
+  loadConfig();
+</script>
+
+</body>
+</html>
