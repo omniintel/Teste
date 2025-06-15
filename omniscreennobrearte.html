@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Vídeo, Relógio e Clima</title>
+  <title>Vídeo, Relógio, Clima e Temporizador</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body, html {
@@ -24,7 +24,6 @@
       max-height: 100vh;
       aspect-ratio: 16/9;
     }
-
     #clockContainer {
       position: absolute;
       top: 1vh;
@@ -92,6 +91,23 @@
       right: 1vw;
       width: clamp(50px, 8vw, 160px);
     }
+    #timerContainer {
+      position: absolute;
+      bottom: 1vh;
+      left: 1vw;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(6px);
+      border-radius: 1vw;
+      padding: 0.8vw 1.2vw;
+      text-align: center;
+      font-size: clamp(1.2rem, 2vw, 3rem);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #timerDisplay {
+      font-weight: bold;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -101,19 +117,28 @@
   Seu navegador não suporta vídeo HTML5.
 </video>
 
-  <div id="clockContainer">
-    <div id="dateText">Carregando data...</div>
-    <div id="timeText"></div>
-  </div>
+<div id="clockContainer">
+  <div id="dateText">Carregando data...</div>
+  <div id="timeText"></div>
+</div>
 
-  <div id="weatherBox">
-    <div class="emoji">☀️ - Santa Rosa</div>
-    <div class="temperature">--</div>
-  </div>
+<div id="weatherBox">
+  <div class="emoji">☀️ - Santa Rosa</div>
+  <div class="temperature">--</div>
+</div>
 
-  <img id="cornerImage" src="https://omniintel.github.io/Teste/logo.png" alt="Omniintel">
+<div id="timerContainer">
+  <div id="timerDisplay">00:00</div>
+</div>
 
- <script>
+<img id="cornerImage" src="https://omniintel.github.io/Teste/logo.png" alt="Omniintel">
+
+<audio id="alertSound" src="timer.mp4"></audio>
+<audio id="startSound" src="timer.mp4"></audio>
+<audio id="endSound" src="timer.mp4"></audio>
+<audio id="pauseEndSound" src="timer.mp4"></audio>
+
+<script>
   const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
   const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo';
   const { createClient } = supabase;
@@ -131,7 +156,7 @@
       if (error) throw error;
 
       if (data && data.length > 0) {
-        videos = data.map(item => item.video_url); // transforma em array de strings
+        videos = data.map(item => item.video_url);
         currentVideoIndex = 0;
         playCurrentVideo();
       }
@@ -163,82 +188,215 @@
 
   document.addEventListener('DOMContentLoaded', loadVideosFromSupabase);
   setInterval(loadVideosFromSupabase, 3600000); // Atualiza a lista a cada hora
-</script>
 
+  // Relógio
+  let previousTime = '';
+  function updateClock() {
+    const dateEl = document.getElementById('dateText');
+    const timeContainer = document.getElementById('timeText');
+    const now = new Date();
 
-  <script>
-    let previousTime = '';
+    const options = { weekday: 'long', day: 'numeric', month: 'long' };
+    const dateStr = now.toLocaleDateString('pt-BR', options);
+    dateEl.textContent = dateStr;
 
-    function updateClock() {
-      const dateEl = document.getElementById('dateText');
-      const timeContainer = document.getElementById('timeText');
-      const now = new Date();
+    const timeStr = now.toTimeString().slice(0, 8);
+    const previousChars = previousTime.split('');
+    const currentChars = timeStr.split('');
 
-      const options = { weekday: 'long', day: 'numeric', month: 'long' };
-      const dateStr = now.toLocaleDateString('pt-BR', options);
-      dateEl.textContent = dateStr;
+    if (timeContainer.children.length !== currentChars.length) {
+      timeContainer.innerHTML = '';
+      currentChars.forEach(char => {
+        const span = document.createElement('div');
+        span.className = 'timeDigit';
+        span.textContent = char;
+        timeContainer.appendChild(span);
+      });
+    } else {
+      currentChars.forEach((char, i) => {
+        const digitEl = timeContainer.children[i];
+        if (digitEl.textContent !== char) {
+          digitEl.classList.remove('flip');
+          void digitEl.offsetWidth;
+          digitEl.classList.add('flip');
+          digitEl.textContent = char;
+        }
+      });
+    }
 
-      const timeStr = now.toTimeString().slice(0, 8);
-      const previousChars = previousTime.split('');
-      const currentChars = timeStr.split('');
+    previousTime = timeStr;
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
 
-      if (timeContainer.children.length !== currentChars.length) {
-        timeContainer.innerHTML = '';
-        currentChars.forEach(char => {
-          const span = document.createElement('div');
-          span.className = 'timeDigit';
-          span.textContent = char;
-          timeContainer.appendChild(span);
-        });
+  // Clima
+  async function updateWeather() {
+    const apiKey = '0aeb1d92eb76b16aed4cde075eeb9955';
+    const cidade = 'Santa Rosa,BR';
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${cidade}&units=metric&lang=pt_br&appid=${apiKey}`;
+    const box = document.getElementById('weatherBox');
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      const temp = Math.round(data.main.temp);
+      const main = data.weather[0].main.toLowerCase();
+
+      const emojiMap = {
+        clear: '☀️', clouds: '☁️', rain: '🌧️',
+        drizzle: '🌦️', thunderstorm: '⛈️',
+        snow: '❄️', mist: '🌫️', fog: '🌁'
+      };
+
+      const emoji = emojiMap[main] || '🌈';
+      box.querySelector('.emoji').textContent = `${emoji} - Santa Rosa`;
+      box.querySelector('.temperature').textContent = `${temp}°`;
+      box.style.display = 'block';
+    } catch (e) {
+      box.style.display = 'none';
+      console.error('Erro ao obter clima:', e);
+    }
+  }
+  updateWeather();
+  setInterval(updateWeather, 600000);
+
+  // Temporizador
+  const timerContainer = document.getElementById('timerContainer');
+const timerDisplay = document.getElementById('timerDisplay');
+const startSound = document.getElementById('startSound');
+const alertSound = document.getElementById('alertSound');
+const endSound = document.getElementById('endSound');
+const pauseEndSound = document.getElementById('pauseEndSound');
+
+let timerData = {};
+let isRunning = false;
+let interval;
+let currentCircuit = 0;
+let timeLeft = 0;
+let isPause = false;
+let countdownPlaying = false;
+
+async function fetchTimerData() {
+  const { data, error } = await supabaseClient
+    .from('cronometro')
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('Erro ao buscar dados do cronômetro:', error);
+    return;
+  }
+
+  timerData = data;
+}
+
+function playSound(sound) {
+  sound.currentTime = 0;
+  sound.play();
+}
+
+function startTimer() {
+  if (!timerData) return;
+  isRunning = true;
+  isPause = false;
+  currentCircuit = 1;
+  timeLeft = timerData.temp;
+  playSound(startSound);
+  setNormalColor();
+  updateTimerDisplay();
+  interval = setInterval(runTimer, 1000);
+}
+
+function runTimer() {
+  if (!isRunning) return;
+
+  timeLeft--;
+
+  if (!isPause && timeLeft === parseInt(timerData.min)) {
+    playSound(alertSound);
+    setAlertColor();
+  }
+
+  if (timeLeft <= 0) {
+    if (!isPause) {
+      if (currentCircuit < timerData.circ) {
+        isPause = true;
+        playSound(endSound);
+        timeLeft = timerData.paus;
+        setPauseColor();
+        countdownPlaying = true;
       } else {
-        currentChars.forEach((char, i) => {
-          const digitEl = timeContainer.children[i];
-          if (digitEl.textContent !== char) {
-            digitEl.classList.remove('flip');
-            void digitEl.offsetWidth;
-            digitEl.classList.add('flip');
-            digitEl.textContent = char;
-          }
+        stopTimer();
+        playSound(endSound);
+        setNormalColor();
+        return;
+      }
+    } else {
+      // Tocando contagem regressiva 3, 2, 1
+      if (countdownPlaying) {
+        countdownPlaying = false;
+        playCountdown(() => {
+          isPause = false;
+          currentCircuit++;
+          timeLeft = timerData.temp;
+          playSound(startSound);
+          setNormalColor();
         });
-      }
-
-      previousTime = timeStr;
-    }
-
-    setInterval(updateClock, 1000);
-    updateClock();
-  </script>
-
-  <script>
-    async function updateWeather() {
-      const apiKey = '0aeb1d92eb76b16aed4cde075eeb9955';
-      const cidade = 'Santa Rosa,BR';
-      const url = `https://api.openweathermap.org/data/2.5/weather?q=${cidade}&units=metric&lang=pt_br&appid=${apiKey}`;
-      const box = document.getElementById('weatherBox');
-      try {
-        const res = await fetch(url);
-        const data = await res.json();
-        const temp = Math.round(data.main.temp);
-        const main = data.weather[0].main.toLowerCase();
-
-        const emojiMap = {
-          clear: '☀️', clouds: '☁️', rain: '🌧️',
-          drizzle: '🌦️', thunderstorm: '⛈️',
-          snow: '❄️', mist: '🌫️', fog: '🌁'
-        };
-
-        const emoji = emojiMap[main] || '🌈';
-        box.querySelector('.emoji').textContent = `${emoji} - Santa Rosa`;
-        box.querySelector('.temperature').textContent = `${temp}°`;
-        box.style.display = 'block';
-      } catch (e) {
-        box.style.display = 'none';
-        console.error('Erro ao obter clima:', e);
+        return;
       }
     }
+  }
 
-    updateWeather();
-    setInterval(updateWeather, 600000);
-  </script>
+  updateTimerDisplay();
+}
+
+function playCountdown(callback) {
+  let count = 3;
+  const countdownInterval = setInterval(() => {
+    playSound(pauseEndSound);
+    count--;
+    if (count <= 0) {
+      clearInterval(countdownInterval);
+      callback();
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  isRunning = false;
+  clearInterval(interval);
+}
+
+function updateTimerDisplay() {
+  const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+  const seconds = (timeLeft % 60).toString().padStart(2, '0');
+  timerDisplay.textContent = `${minutes}:${seconds}`;
+}
+
+function setAlertColor() {
+  timerContainer.style.backgroundColor = 'rgba(255, 0, 0, 0.7)'; // Vermelho
+}
+
+function setPauseColor() {
+  timerContainer.style.backgroundColor = 'rgba(0, 0, 255, 0.7)'; // Azul
+}
+
+function setNormalColor() {
+  timerContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'; // Original
+}
+
+async function monitorTimer() {
+  await fetchTimerData();
+
+  if (timerData.play === 1 && !isRunning) {
+    startTimer();
+  } else if (timerData.play === 0 && isRunning) {
+    stopTimer();
+    setNormalColor();
+  }
+}
+
+setInterval(monitorTimer, 500);
+
+</script>
 </body>
 </html>
