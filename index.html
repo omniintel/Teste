@@ -38,6 +38,7 @@
       padding: 10px;
       border-radius: 8px;
       width: 150px;
+      cursor: pointer;
     }
     .thumbnail {
       width: 100%;
@@ -55,145 +56,154 @@
   <div id="player-wrapper">
     <div id="player"></div>
   </div>
-  <button id="toggle-sync">🔁 Sincronizar</button>
+  <button id="toggle-sync">🔁 Forçar Sincronizar</button>
   <div id="playlist"></div>
 
-  <script>
-    const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
-    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo'; // sua chave
-    const playlistTable = 'videos';
-    const syncTable = 'current_video';
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script>
+  const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
+  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo';
+  const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-    let playlist = [];
-    let currentIndex = 0;
-    let currentVideoId = '';
-    let player = null;
+  const playlistTable = 'videos';
+  const syncTable = 'current_video';
 
-    const generateEmbedUrl = (url) => {
-      const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
-      return match ? `https://www.youtube.com/embed/${match[1]}?enablejsapi=1&rel=0&controls=0&autoplay=1` : null;
-    };
+  let playlist = [];
+  let currentIndex = 0;
+  let player = null;
+  let syncIdAtual = null;
+  let checandoSync = true;
 
-    const fetchVideos = async () => {
-      const res = await fetch(`${supabaseUrl}/rest/v1/${playlistTable}?select=*`, {
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`
-        }
-      });
-      return res.ok ? await res.json() : [];
-    };
+  function gerarEmbedUrl(link) {
+    const match = link.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
+    return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1&enablejsapi=1&controls=0&rel=0` : link;
+  }
 
-    const loadPlaylist = async () => {
-      playlist = await fetchVideos();
-      playlist.sort((a, b) => a.id - b.id);
-      const container = document.getElementById('playlist');
-      container.innerHTML = '';
-      playlist.forEach((video, index) => {
-        const item = document.createElement('div');
-        item.className = 'video-item';
+  async function carregarPlaylist() {
+    const { data, error } = await supabase.from(playlistTable).select('*').order('id', { ascending: true });
+    if (error) {
+      console.error(error);
+      return;
+    }
+    playlist = data;
+    renderizarPlaylist();
+  }
 
-        const youtubeId = video.youtube_id.split('/embed/')[1]?.split('?')[0];
+  function renderizarPlaylist() {
+    const container = document.getElementById('playlist');
+    container.innerHTML = '';
+    playlist.forEach((video) => {
+      const item = document.createElement('div');
+      item.className = 'video-item';
+      const youtubeId = video.youtube_id.split('/embed/')[1]?.split('?')[0];
+      const thumbnail = document.createElement('img');
+      thumbnail.src = `https://img.youtube.com/vi/${youtubeId}/default.jpg`;
+      thumbnail.className = 'thumbnail';
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.innerText = video.title || 'Vídeo';
 
-        const thumbnail = document.createElement('img');
-        thumbnail.src = `https://img.youtube.com/vi/${youtubeId}/default.jpg`;
-        thumbnail.className = 'thumbnail';
-
-        const title = document.createElement('div');
-        title.className = 'title';
-        title.innerText = video.title || 'Vídeo';
-
-        item.appendChild(thumbnail);
-        item.appendChild(title);
-        container.appendChild(item);
-      });
-
-      if (playlist.length > 0) {
-        currentIndex = 0;
-        playVideo(playlist[0].youtube_id);
-      }
-    };
-
-    const playVideo = async (embedUrl) => {
-      const videoId = embedUrl.split('/embed/')[1].split('?')[0];
-      currentVideoId = videoId;
-
-      const iframe = document.createElement('iframe');
-      iframe.id = 'ytplayer';
-      iframe.src = `${embedUrl}&enablejsapi=1`;
-      iframe.frameBorder = 0;
-      iframe.allow = 'autoplay; encrypted-media';
-      iframe.allowFullscreen = true;
-      iframe.width = '100%';
-      iframe.height = '100%';
-
-      const playerDiv = document.getElementById('player');
-      playerDiv.innerHTML = '';
-      playerDiv.appendChild(iframe);
-
-      player = new YT.Player('ytplayer', {
-        events: {
-          'onStateChange': onPlayerStateChange
-        }
-      });
-    };
-
-    const onPlayerStateChange = (event) => {
-      if (event.data === YT.PlayerState.ENDED) {
-        currentIndex = (currentIndex + 1) % playlist.length;
-        playVideo(playlist[currentIndex].youtube_id);
-      }
-    };
-
-    const checkSyncButton = async () => {
-      const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`
-        }
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      const buttonValue = data[0]?.Button || 0;
-      if (buttonValue === 1) {
-        await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
-          method: 'PATCH',
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ Button: 0 })
-        });
-        location.reload();
-      }
-    };
-
-    document.getElementById('toggle-sync').addEventListener('click', async () => {
-      await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ Button: 1 })
-      });
+      item.appendChild(thumbnail);
+      item.appendChild(title);
+      item.onclick = () => reproduzirVideoPorId(video.id);
+      container.appendChild(item);
     });
+  }
 
-    const initYouTubeAPI = () => {
-      const tag = document.createElement('script');
-      tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-    };
+  async function reproduzirVideoPorId(id) {
+    const video = playlist.find(v => v.id === id);
+    if (!video) return;
+    currentIndex = playlist.findIndex(v => v.id === id);
+    reproduzir(video.youtube_id, video.id);
+  }
 
-    initYouTubeAPI();
+  async function reproduzir(link, id) {
+    const embed = gerarEmbedUrl(link);
+    const playerDiv = document.getElementById('player');
+    playerDiv.innerHTML = `<iframe id="ytplayer" src="${embed}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen style="width:100%; height:100%;"></iframe>`;
 
-    window.onload = async () => {
-      await loadPlaylist();
-      setInterval(() => checkSyncButton(), 500); // Verifica a cada meio segundo
-    };
-  </script>
+    syncIdAtual = id;
+    await atualizarSync(id, link);
+  }
+
+  async function atualizarSync(syncid, link) {
+    await supabase.from(syncTable).update({
+      syncid: syncid,
+      sync: link
+    }).eq('id', 1);
+  }
+
+  async function checarSync() {
+    const { data, error } = await supabase.from(syncTable).select('*').eq('id', 1).single();
+    if (error) {
+      console.error(error);
+      return;
+    }
+    if (!data) return;
+
+    if (data.syncid !== syncIdAtual) {
+      const video = playlist.find(v => v.id === data.syncid);
+      if (video) {
+        currentIndex = playlist.findIndex(v => v.id === video.id);
+        reproduzir(video.youtube_id, video.id);
+      }
+    }
+  }
+
+  async function avancar() {
+    currentIndex = (currentIndex + 1) % playlist.length;
+    const proximoVideo = playlist[currentIndex];
+    reproduzir(proximoVideo.youtube_id, proximoVideo.id);
+  }
+
+  setInterval(() => {
+    if (checandoSync) checarSync();
+  }, 500); // Sincroniza a cada meio segundo
+
+  document.getElementById('toggle-sync').addEventListener('click', async () => {
+    const { data, error } = await supabase.from(syncTable).select('*').eq('id', 1).single();
+    if (data) {
+      const video = playlist.find(v => v.id === data.syncid);
+      if (video) {
+        currentIndex = playlist.findIndex(v => v.id === video.id);
+        reproduzir(video.youtube_id, video.id);
+      }
+    }
+  });
+
+  window.onYouTubeIframeAPIReady = () => {
+    const iframe = document.getElementById('ytplayer');
+    player = new YT.Player(iframe, {
+      events: {
+        'onStateChange': (event) => {
+          if (event.data === YT.PlayerState.ENDED) {
+            avancar();
+          }
+        }
+      }
+    });
+  };
+
+  function carregarAPIDoYoutube() {
+    const tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.body.appendChild(tag);
+  }
+
+  window.onload = async () => {
+    await carregarPlaylist();
+    const { data } = await supabase.from(syncTable).select('*').eq('id', 1).single();
+    if (data) {
+      const video = playlist.find(v => v.id === data.syncid);
+      if (video) {
+        currentIndex = playlist.findIndex(v => v.id === video.id);
+        reproduzir(video.youtube_id, video.id);
+      } else {
+        reproduzir(playlist[0].youtube_id, playlist[0].id);
+      }
+    }
+    carregarAPIDoYoutube();
+  };
+</script>
 </body>
 </html>
