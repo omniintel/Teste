@@ -92,7 +92,7 @@
 
 <script>
   const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
-  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // sua chave completa aqui
+  const supabaseKey = 'SUA_CHAVE_SUPABASE_AQUI';
   const { createClient } = supabase;
   const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
@@ -106,6 +106,7 @@
   let cronometroId = null;
   let playState = 0;
 
+  // Carregar dados iniciais
   async function loadConfig() {
     const { data, error } = await supabaseClient
       .from('cronometro')
@@ -129,6 +130,7 @@
     tempInput.value = revertValue(data.temp);
   }
 
+  // Conversão dos valores
   function revertValue(value) {
     return value >= 60 ? (value / 60) * 100 : value;
   }
@@ -137,10 +139,12 @@
     return value >= 100 ? (value / 100) * 60 : value;
   }
 
+  // Atualizar botão Play/Pause
   function updatePlayPauseButton() {
     playPauseBtn.textContent = playState === 1 ? 'Pause ⏸️' : 'Play ▶️';
   }
 
+  // Botão Play/Pause manual
   playPauseBtn.addEventListener('click', async () => {
     playState = playState === 1 ? 0 : 1;
     const { error } = await supabaseClient
@@ -157,6 +161,7 @@
     }
   });
 
+  // Salvar configurações
   document.getElementById('saveBtn').addEventListener('click', async () => {
     const newConfig = {
       circ: parseInt(circSelect.value),
@@ -178,4 +183,23 @@
     }
   });
 
-  load
+  // ✅ Escuta em tempo real no banco
+  supabaseClient
+    .channel('cronometro-changes')
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'cronometro' },
+      payload => {
+        if (payload.new) {
+          playState = payload.new.play;
+          updatePlayPauseButton();
+        }
+      }
+    )
+    .subscribe();
+
+  loadConfig();
+</script>
+
+</body>
+</html>
