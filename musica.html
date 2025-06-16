@@ -113,6 +113,7 @@
 
     let playlist = [];
     let currentVideoId = '';
+    let currentSyncId = null;
 
     const generateEmbedUrl = (url) => {
       const match = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
@@ -199,8 +200,8 @@
           updateCurrentVideo(video);
         };
 
-        // Marca o vídeo em exibição
-        if (currentVideoId === youtubeId) {
+        // Marca o vídeo em exibição com base em syncid
+        if (video.id === currentSyncId) {
           item.classList.add('current');
           const playingTag = document.createElement('div');
           playingTag.className = 'now-playing';
@@ -219,6 +220,7 @@
     const updateCurrentVideo = async (video) => {
       const videoId = video.youtube_id.split('/embed/')[1].split('?')[0];
       currentVideoId = videoId;
+      currentSyncId = video.id;
 
       await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
         method: 'PATCH',
@@ -245,8 +247,11 @@
       if (!data[0]) return;
 
       const remoteId = data[0].sync;
-      if (remoteId && remoteId !== currentVideoId) {
+      const remoteSyncId = data[0].syncid;
+
+      if (remoteId !== currentVideoId || remoteSyncId !== currentSyncId) {
         currentVideoId = remoteId;
+        currentSyncId = remoteSyncId;
         await loadPlaylist();
       }
     };
@@ -305,6 +310,7 @@
       });
       const data = await res.json();
       currentVideoId = data[0]?.sync || '';
+      currentSyncId = data[0]?.syncid || null;
 
       await loadPlaylist();
       setInterval(() => checkCurrentSync(), 2000);
