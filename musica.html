@@ -11,16 +11,7 @@
       padding: 20px;
     }
     #player-wrapper {
-      display: none; /* Removido player principal */
-    }
-    #toggle-autoclick {
-      margin-top: 10px;
-      padding: 10px 20px;
-      background: #ff0066;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
+      display: none;
     }
     #add-form {
       margin-bottom: 20px;
@@ -75,12 +66,10 @@
       cursor: pointer;
       font-weight: bold;
     }
-    /* Marca o vídeo em exibição */
     .video-item.current {
       border-color: #00c3ff;
       box-shadow: 0 0 15px #00c3ff;
     }
-    /* Marcador "Em Exibição" */
     .now-playing {
       position: absolute;
       bottom: 5px;
@@ -98,8 +87,6 @@
 <body>
   <h1>🎮 OmniPlayer</h1>
 
-  <button id="toggle-autoclick">🔁 Atualizar</button>
-
   <form id="add-form">
     <input type="text" id="youtube-link" placeholder="Cole o link do YouTube aqui" required>
     <button type="submit">Adicionar</button>
@@ -111,7 +98,6 @@
     const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo';
     const playlistTable = 'videos';
-    const syncTable = 'current_video';
 
     let playlist = [];
     let currentIndex = 0;
@@ -207,7 +193,6 @@
         item.appendChild(title);
         item.appendChild(remove);
 
-        // Marca o vídeo em exibição
         if (currentVideoId === youtubeId) {
           item.classList.add('current');
           const playingTag = document.createElement('div');
@@ -220,85 +205,16 @@
       });
     };
 
-    // Atualiza o vídeo "em exibição" na tabela sync e localmente
     const updateCurrentVideo = async (video) => {
       const videoId = video.youtube_id.split('/embed/')[1].split('?')[0];
       currentVideoId = videoId;
-
-      await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ sync: videoId, syncid: video.id })
-      });
-      await loadPlaylist(); // Atualiza a interface
+      await loadPlaylist();
     };
 
-    // Checa se o vídeo sync mudou externamente e atualiza o local
-    const checkCurrentSync = async () => {
-      const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`
-        }
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data[0]) return;
-
-      const remoteId = data[0].sync;
-      const remoteSyncId = data[0].syncid;
-      if (remoteId && remoteId !== currentVideoId) {
-        currentVideoId = remoteId;
-        currentIndex = playlist.findIndex(v => {
-          const vid = v.youtube_id.split('/embed/')[1].split('?')[0];
-          return vid === remoteId;
-        });
-        await loadPlaylist();
-      }
+    window.onload = async () => {
+      playlist = await fetchVideos();
+      await loadPlaylist();
     };
-
-    // Botão de sincronia: ao clicar, insere 1 na coluna Button e espera voltar para 0
-    const toggleSyncButton = async () => {
-      // Coloca 1 no Button da linha id=1
-      await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ Button: 1 })
-      });
-
-      // Espera até Button voltar a 0 (polling)
-      const waitForReset = () => {
-        return new Promise(resolve => {
-          const interval = setInterval(async () => {
-            const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
-              headers: {
-                'apikey': supabaseKey,
-                'Authorization': `Bearer ${supabaseKey}`
-              }
-            });
-            const data = await res.json();
-            if (data[0]?.Button === 0) {
-              clearInterval(interval);
-              resolve();
-            }
-          }, 1000);
-        });
-      };
-
-      await waitForReset();
-
-      alert('Playlist atualizada!');
-    };
-
-    document.getElementById('toggle-autoclick').addEventListener('click', toggleSyncButton);
 
     document.getElementById('add-form').addEventListener('submit', e => {
       e.preventDefault();
@@ -308,12 +224,6 @@
         document.getElementById('youtube-link').value = '';
       }
     });
-
-    window.onload = async () => {
-      playlist = await fetchVideos();
-      await loadPlaylist();
-      setInterval(() => checkCurrentSync(), 2000);
-    };
   </script>
 </body>
 </html>
