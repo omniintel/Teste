@@ -20,13 +20,13 @@
       width: 100%;
       height: 100%;
     }
-    #toggle-sync {
+    #sync-status {
       padding: 10px 20px;
       background: #00c3ff;
       color: white;
       border: none;
       border-radius: 8px;
-      cursor: pointer;
+      display: inline-block;
     }
     #playlist {
       display: flex;
@@ -60,7 +60,7 @@
   <div id="player-wrapper">
     <div id="player"></div>
   </div>
-  <button id="toggle-sync">🔁 Forçar Sincronizar</button>
+  <div id="sync-status">🔄 Verificando...</div>
   <div id="playlist"></div>
 
 <script>
@@ -109,6 +109,42 @@
     });
     const data = await res.json();
     return data.length > 0 ? data[0] : null;
+  };
+
+  const updateButtonState = async (value) => {
+    await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ Button: value })
+    });
+  };
+
+  const checkButtonStatus = async () => {
+    const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1&select=Button`, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`
+      }
+    });
+    const data = await res.json();
+    return data.length > 0 ? data[0].Button : null;
+  };
+
+  const updateSyncStatus = async () => {
+    const statusEl = document.getElementById('sync-status');
+    const buttonStatus = await checkButtonStatus();
+
+    if (buttonStatus === 1) {
+      statusEl.innerText = '🔄 Atualizando Playlist...';
+      await updateButtonState(0);
+      location.reload();
+    } else {
+      statusEl.innerText = '✅ Playlist Atualizada';
+    }
   };
 
   const setVideo = (embedUrl, index, id) => {
@@ -167,18 +203,8 @@
     }
   };
 
-  document.getElementById('toggle-sync').addEventListener('click', async () => {
-    const data = await fetchSync();
-    if (data) {
-      const video = playlist.find(v => v.id === data.syncid);
-      if (video) {
-        const index = playlist.findIndex(v => v.id === data.syncid);
-        setVideo(video.youtube_id, index, video.id);
-      }
-    }
-  });
-
-  setInterval(syncChecker, 1000); // Verifica sincronização a cada 1 segundo
+  setInterval(syncChecker, 1000);
+  setInterval(updateSyncStatus, 2000); // Checa status a cada 2 segundos
 
   const loadApp = async () => {
     playlist = await fetchVideos();
