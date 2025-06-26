@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Peido do Lucas</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: black;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+    }
+
+    .painel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 420px;
+      height: 900px;
+      background-image: url('background.jpg'); 
+      background-size: cover;
+      background-position: center;
+      pointer-events: none; /* evita interação no painel */
+    }
+
+    #botaoImagem {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      outline: none;
+      padding: 0;
+      pointer-events: all; /* permite clique mesmo com o painel desativado */
+    }
+
+    #imagemBotao {
+      width: 429px;
+      height: auto;
+      display: block;
+      transition: opacity 0.1s ease;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="painel"></div>
+
+  <button id="botaoImagem">
+    <img src="botao.png" alt="Botão" id="imagemBotao" draggable="false"/>
+  </button>
+
+  <audio id="somClique" src="peido.mp4" preload="auto"></audio>
+
+  <script>
+    const botao = document.getElementById("botaoImagem");
+    const imagem = document.getElementById("imagemBotao");
+    const som = document.getElementById("somClique");
+
+    botao.addEventListener("click", () => {
+      som.currentTime = 0;
+      som.play();
+
+      imagem.style.opacity = "0";
+      setTimeout(() => {
+        imagem.style.opacity = "1";
+      }, 100);
+    });
+  </script>
+
+</body>
+</html>
