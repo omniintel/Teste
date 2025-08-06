@@ -62,7 +62,14 @@
   </div>
   <div id="sync-status">🔄 Verificando...</div>
   <div id="playlist"></div>
+  <script src="https://www.youtube.com/iframe_api"></script>
 <script>
+
+    // Esta função é chamada automaticamente pela API do YouTube quando estiver pronta
+  function onYouTubeIframeAPIReady() {
+    loadApp(); // Agora só carrega os vídeos quando YT estiver disponível
+  }
+  
   const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
   const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo';
   const playlistTable = 'videos';
@@ -255,10 +262,10 @@
     }
   };
 
-  loadApp();
 </script>
 </body>
 </html>
+
 
 
 
