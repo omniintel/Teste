@@ -5,10 +5,8 @@
   <title>OmniPlayer</title>
   <style>
     body { font-family: Arial, sans-serif; background: #111; color: white; padding: 20px; }
-    #player-wrapper { width: 100%; height: 300px; background: #000; margin-bottom: 20px; position: relative; }
-    #playerA, #playerB {
-      position: absolute; width: 100%; height: 100%; top: 0; left: 0;
-    }
+    #player-wrapper { width: 100%; height: 300px; background: #000; margin-bottom: 20px; }
+    #player { width: 100%; height: 100%; }
     #sync-status { padding: 10px 20px; background: #00c3ff; color: white; border: none; border-radius: 8px; display: inline-block; }
     #playlist { display: flex; flex-wrap: wrap; gap: 10px; }
     .video-item { background: #222; padding: 10px; border-radius: 8px; width: 150px; cursor: pointer; transition: transform 0.2s; }
@@ -19,10 +17,7 @@
 </head>
 <body>
   <h1>🎮 OmniPlayer</h1>
-  <div id="player-wrapper">
-    <div id="playerA"></div>
-    <div id="playerB"></div>
-  </div>
+  <div id="player-wrapper"><div id="player"></div></div>
   <div id="sync-status">🔄 Verificando...</div>
   <div id="playlist"></div>
 
@@ -36,74 +31,67 @@
     let playlist = [];
     let currentIndex = 0;
     let syncIdAtual = null;
+    let ytPlayer;
 
-    let playerA, playerB;
-    let playerAReady = false;
-    let playerBReady = false;
-    let activePlayer = 'A';
-
-    const crossfadeDuration = 10; // segundos
-    const fadeIntervalMs = 200;
-    let crossfadeInterval = null;
-
-    // API Supabase
-    async function fetchVideos() {
+    // === API SUPABASE ===
+    const fetchVideos = async () => {
       const res = await fetch(`${supabaseUrl}/rest/v1/${playlistTable}?select=*`, {
         headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` }
       });
       const data = await res.json();
-      return data.sort((a,b) => a.id - b.id);
-    }
+      return data.sort((a, b) => a.id - b.id);
+    };
 
-    async function updateSync(syncid, link) {
+    const updateSync = async (syncid, link) => {
       await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
-        method:'PATCH',
-        headers: {apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Content-Type':'application/json'},
-        body: JSON.stringify({syncid, sync: link})
+        method: 'PATCH',
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syncid: syncid, sync: link })
       });
-    }
+    };
 
-    async function fetchSync() {
+    const fetchSync = async () => {
       const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1&select=*`, {
-        headers: {apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`}
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` }
       });
       const data = await res.json();
-      return data.length>0 ? data[0] : null;
-    }
+      return data.length > 0 ? data[0] : null;
+    };
 
-    async function updateButtonState(value) {
+    const updateButtonState = async (value) => {
       await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
-        method:'PATCH',
-        headers: {apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Content-Type':'application/json'},
-        body: JSON.stringify({Button: value})
+        method: 'PATCH',
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Button: value })
       });
-    }
+    };
 
-    async function checkButtonStatus() {
+    const checkButtonStatus = async () => {
       const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1&select=Button`, {
-        headers: {apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`}
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` }
       });
       const data = await res.json();
-      return data.length>0 ? data[0].Button : null;
-    }
+      return data.length > 0 ? data[0].Button : null;
+    };
 
-    // Interface
-    async function updateSyncStatus() {
+    // === INTERFACE ===
+    const updateSyncStatus = async () => {
       const statusEl = document.getElementById('sync-status');
       const buttonStatus = await checkButtonStatus();
-      if(buttonStatus === 1) {
+
+      if (buttonStatus === 1) {
         statusEl.innerText = '🔄 Atualizando Playlist...';
         await updateButtonState(0);
-        await reloadPlaylist();
+        await reloadPlaylist(); // agora recarrega apenas a playlist
       } else {
         statusEl.innerText = '✅ Playlist Atualizada';
       }
-    }
+    };
 
-    function renderPlaylist() {
+    const renderPlaylist = () => {
       const container = document.getElementById('playlist');
       container.innerHTML = '';
-      playlist.forEach((video, i) => {
+      playlist.forEach((video, index) => {
         const item = document.createElement('div');
         item.className = 'video-item';
 
@@ -114,148 +102,90 @@
 
         const title = document.createElement('div');
         title.className = 'title';
-        title.innerText = `${i+1}. ${video.title || 'Vídeo'}`;
+        title.innerText = `${index + 1}. ${video.title || 'Vídeo'}`;
 
-        item.onclick = () => setVideo(i);
+        item.onclick = () => setVideo(index);
         item.appendChild(thumbnail);
         item.appendChild(title);
         container.appendChild(item);
       });
-    }
+    };
 
-    function extractId(url) {
-      if(!url) return '';
-      if(url.includes('embed/')) return url.split('embed/')[1].split('?')[0];
-      if(url.includes('v=')) return url.split('v=')[1].split('&')[0];
-      return url; // id puro
-    }
-
-    // Youtube API
+    // === PLAYER YOUTUBE ===
     function onYouTubeIframeAPIReady() {
-      playerA = new YT.Player('playerA', {
-        height:'100%', width:'100%', videoId:'',
-        playerVars: {autoplay:0, controls:1},
+      ytPlayer = new YT.Player('player', {
+        height: '100%',
+        width: '100%',
+        videoId: '',
+        playerVars: { autoplay: 1, controls: 1 },
         events: {
-          onReady: () => { playerAReady = true; tryStartApp(); },
-          onStateChange: onPlayerStateChange
-        }
-      });
-      playerB = new YT.Player('playerB', {
-        height:'100%', width:'100%', videoId:'',
-        playerVars: {autoplay:0, controls:1},
-        events: {
-          onReady: () => { playerBReady = true; tryStartApp(); },
           onStateChange: onPlayerStateChange
         }
       });
     }
 
-    function tryStartApp() {
-      if(playerAReady && playerBReady) {
-        loadApp();
-      }
-    }
+    const setVideo = (index) => {
+      const video = playlist[index];
+      if (!video) return;
 
-    // Define vídeo e inicia crossfade
-    function setVideo(index) {
-      if(!playlist[index]) return;
-      clearInterval(crossfadeInterval);
+      const youtubeId = extractId(video.youtube_id);
+      ytPlayer.loadVideoById(youtubeId);
+      currentIndex = index;
+      syncIdAtual = video.id;
+      updateSync(video.id, `https://www.youtube.com/embed/${youtubeId}`);
+    };
 
-      const nextVideo = playlist[index];
-      const nextId = extractId(nextVideo.youtube_id);
-
-      const inactivePlayer = activePlayer === 'A' ? playerB : playerA;
-      const activePlayerObj = activePlayer === 'A' ? playerA : playerB;
-
-      // Carrega no player inativo, volume 0, play
-      inactivePlayer.loadVideoById(nextId);
-      inactivePlayer.setVolume(0);
-      inactivePlayer.playVideo();
-
-      // Monitorar para iniciar crossfade
-      function startFade() {
-        crossfadeInterval = setInterval(() => {
-          const timeActive = activePlayerObj.getCurrentTime();
-          const duration = activePlayerObj.getDuration();
-          if(!duration) return;
-
-          const timeLeft = duration - timeActive;
-          if(timeLeft <= crossfadeDuration) {
-            const volInactive = Math.min(100, 100 * (crossfadeDuration - timeLeft)/crossfadeDuration);
-            const volActive = Math.max(0, 100 * timeLeft/crossfadeDuration);
-            activePlayerObj.setVolume(volActive);
-            inactivePlayer.setVolume(volInactive);
-
-            if(timeLeft <= 0) {
-              currentIndex = index;
-              syncIdAtual = nextVideo.id;
-              updateSync(nextVideo.id, `https://www.youtube.com/embed/${nextId}`);
-              activePlayer = activePlayer === 'A' ? 'B' : 'A';
-              clearInterval(crossfadeInterval);
-            }
-          }
-        }, fadeIntervalMs);
-      }
-
-      // Se já estiver tocando, inicia crossfade logo
-      if(activePlayerObj.getPlayerState() === YT.PlayerState.PLAYING) {
-        startFade();
-      } else {
-        // Se não, espera o player tocar para começar crossfade
-        const listener = (event) => {
-          if(event.data === YT.PlayerState.PLAYING) {
-            startFade();
-            // Remove listener para evitar duplicação
-            if(activePlayer === 'A') playerA.removeEventListener('onStateChange', listener);
-            else playerB.removeEventListener('onStateChange', listener);
-          }
-        };
-        if(activePlayer === 'A') playerA.addEventListener('onStateChange', listener);
-        else playerB.addEventListener('onStateChange', listener);
-      }
-    }
-
-    // Backup: se vídeo terminar sem crossfade
-    function onPlayerStateChange(event) {
-      if(event.data === YT.PlayerState.ENDED) {
+    const onPlayerStateChange = (event) => {
+      if (event.data === YT.PlayerState.ENDED) {
         playNext();
       }
-    }
+    };
 
-    function playNext() {
+    const playNext = () => {
       const nextIndex = (currentIndex + 1) % playlist.length;
       setVideo(nextIndex);
-    }
+    };
 
-    // Sincronização
-    async function syncChecker() {
+    // === SINCRONIZAÇÃO ===
+    const syncChecker = async () => {
       const data = await fetchSync();
-      if(data && data.syncid !== syncIdAtual) {
-        const idx = playlist.findIndex(v => v.id === data.syncid);
-        if(idx >= 0) setVideo(idx);
+      if (data && data.syncid !== syncIdAtual) {
+        const index = playlist.findIndex(v => v.id === data.syncid);
+        if (index >= 0) setVideo(index);
       }
-    }
+    };
 
-    async function reloadPlaylist() {
+    // === AUXILIARES ===
+    const extractId = (url) => {
+      if (!url) return '';
+      if (url.includes('embed/')) return url.split('embed/')[1].split('?')[0];
+      if (url.includes('v=')) return url.split('v=')[1].split('&')[0];
+      return url; // já é ID puro
+    };
+
+    const reloadPlaylist = async () => {
       playlist = await fetchVideos();
       renderPlaylist();
-    }
+    };
 
-    async function loadApp() {
+    const loadApp = async () => {
       await reloadPlaylist();
       await updateButtonState(0);
       const sync = await fetchSync();
-      if(sync) {
-        const idx = playlist.findIndex(v => v.id === sync.syncid);
-        if(idx >= 0) setVideo(idx);
-      } else if(playlist.length > 0) {
+      if (sync) {
+        const index = playlist.findIndex(v => v.id === sync.syncid);
+        if (index >= 0) setVideo(index);
+      } else if (playlist.length > 0) {
         setVideo(0);
       }
-    }
+    };
 
-    // Check botões de atualização
-    setInterval(syncChecker, 500);
-    setInterval(updateSyncStatus, 500);
+    // === INTERVALOS ===
+    setInterval(syncChecker, 100);
+    setInterval(updateSyncStatus, 100);
+
+    loadApp();
   </script>
 </body>
 </html>
+
