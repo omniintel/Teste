@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>OmniPlayer</title>
   <style>
     body {
@@ -63,169 +63,181 @@
   <div id="sync-status">🔄 Verificando...</div>
   <div id="playlist"></div>
 
-<script>
-  const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
-  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo';
-  const playlistTable = 'videos';
-  const syncTable = 'current_video';
+  <script>
+    const supabaseUrl = 'https://hgxuakniyncpbuvksiql.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhneHVha25peW5jcGJ1dmtzaXFsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODcyNTA2MCwiZXhwIjoyMDY0MzAxMDYwfQ.PqFYkPC-87s3regeKRhfMsZi9t_at-LxQTP23RGOyEo';
+    const playlistTable = 'videos';
+    const syncTable = 'current_video';
 
-  let playlist = [];
-  let currentIndex = 0;
-  let syncIdAtual = null;
+    let playlist = [];
+    let currentIndex = 0;
+    let syncIdAtual = null;
+    let playerInterval = null;
 
-  const gerarEmbedUrl = (url) => {
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
-    return match ? https://www.youtube.com/embed/${match[1]}?autoplay=1&controls=0 : url;
-  };
+    const fetchVideos = async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${playlistTable}?select=*`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      const data = await res.json();
+      return data.sort((a, b) => a.id - b.id); // Ordena por ID
+    };
 
-  const fetchVideos = async () => {
-    const res = await fetch(${supabaseUrl}/rest/v1/${playlistTable}?select=*, {
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': Bearer ${supabaseKey}
+    const updateSync = async (syncid, link) => {
+      await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ syncid: syncid, sync: link })
+      });
+    };
+
+    const fetchSync = async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1&select=*`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      const data = await res.json();
+      return data.length > 0 ? data[0] : null;
+    };
+
+    const updateButtonState = async (value) => {
+      await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ Button: value })
+      });
+    };
+
+    const checkButtonStatus = async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1&select=Button`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      const data = await res.json();
+      return data.length > 0 ? data[0].Button : null;
+    };
+
+    const updateSyncStatus = async () => {
+      const statusEl = document.getElementById('sync-status');
+      const buttonStatus = await checkButtonStatus();
+
+      if (buttonStatus === 1) {
+        statusEl.innerText = '🔄 Atualizando Playlist...';
+        await updateButtonState(0);
+        location.reload();
+      } else {
+        statusEl.innerText = '✅ Playlist Atualizada';
       }
-    });
-    return res.ok ? await res.json() : [];
-  };
+    };
 
-  const updateSync = async (syncid, link) => {
-    await fetch(${supabaseUrl}/rest/v1/${syncTable}?id=eq.1, {
-      method: 'PATCH',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': Bearer ${supabaseKey},
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ syncid: syncid, sync: link })
-    });
-  };
+    const setVideo = (embedUrl, index, id) => {
+      const player = document.getElementById('player');
+      player.innerHTML = `
+        <iframe id="ytplayer" width="100%" height="100%" src="${embedUrl}" 
+          frameborder="0" allow="autoplay; encrypted-media" allowfullscreen>
+        </iframe>
+      `;
+      currentIndex = index;
+      syncIdAtual = id;
+      updateSync(id, embedUrl);
 
-  const fetchSync = async () => {
-    const res = await fetch(${supabaseUrl}/rest/v1/${syncTable}?id=eq.1&select=*, {
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': Bearer ${supabaseKey}
+      clearInterval(playerInterval);
+      playerInterval = setInterval(checkVideoEnded, 3000); // Checa a cada 3s
+    };
+
+    const checkVideoEnded = () => {
+      const iframe = document.getElementById('ytplayer');
+      if (!iframe) return;
+
+      const playerWindow = iframe.contentWindow;
+      if (!playerWindow) return;
+
+      // Essa parte não detecta fim de vídeo diretamente, mas serve para sincronização forçada
+      // Com player API do YouTube seria ideal (mas exige outra abordagem com YouTube IFrame API)
+    };
+
+    const playNext = () => {
+      const nextIndex = (currentIndex + 1) % playlist.length;
+      const nextVideo = playlist[nextIndex];
+      setVideo(nextVideo.youtube_id, nextIndex, nextVideo.id);
+    };
+
+    const syncChecker = async () => {
+      const data = await fetchSync();
+      if (data && data.syncid !== syncIdAtual) {
+        const video = playlist.find(v => v.id === data.syncid);
+        if (video) {
+          const index = playlist.findIndex(v => v.id === data.syncid);
+          setVideo(video.youtube_id, index, video.id);
+        }
       }
-    });
-    const data = await res.json();
-    return data.length > 0 ? data[0] : null;
-  };
+    };
 
-  const updateButtonState = async (value) => {
-    await fetch(${supabaseUrl}/rest/v1/${syncTable}?id=eq.1, {
-      method: 'PATCH',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': Bearer ${supabaseKey},
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ Button: value })
-    });
-  };
+    const renderPlaylist = () => {
+      const container = document.getElementById('playlist');
+      container.innerHTML = '';
 
-  const checkButtonStatus = async () => {
-    const res = await fetch(${supabaseUrl}/rest/v1/${syncTable}?id=eq.1&select=Button, {
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': Bearer ${supabaseKey}
+      playlist.forEach((video, index) => {
+        const item = document.createElement('div');
+        item.className = 'video-item';
+
+        const youtubeId = video.youtube_id.split('/embed/')[1]?.split('?')[0];
+
+        const thumbnail = document.createElement('img');
+        thumbnail.src = `https://img.youtube.com/vi/${youtubeId}/default.jpg`;
+        thumbnail.className = 'thumbnail';
+
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.innerText = `${index + 1}. ${video.title || 'Vídeo'}`;
+
+        item.onclick = () => setVideo(video.youtube_id, index, video.id);
+
+        item.appendChild(thumbnail);
+        item.appendChild(title);
+        container.appendChild(item);
+      });
+    };
+
+    const loadApp = async () => {
+      playlist = await fetchVideos();
+      renderPlaylist();
+
+      await updateButtonState(0); // Inicializa com Button = 0
+
+      const sync = await fetchSync();
+      if (sync) {
+        const video = playlist.find(v => v.id === sync.syncid);
+        if (video) {
+          const index = playlist.findIndex(v => v.id === video.id);
+          setVideo(video.youtube_id, index, video.id);
+          return;
+        }
       }
-    });
-    const data = await res.json();
-    return data.length > 0 ? data[0].Button : null;
-  };
 
-  const updateSyncStatus = async () => {
-    const statusEl = document.getElementById('sync-status');
-    const buttonStatus = await checkButtonStatus();
-
-    if (buttonStatus === 1) {
-      statusEl.innerText = '🔄 Atualizando Playlist...';
-      await updateButtonState(0);
-      location.reload();
-    } else {
-      statusEl.innerText = '✅ Playlist Atualizada';
-    }
-  };
-
-  const setVideo = (embedUrl, index, id) => {
-    const player = document.getElementById('player');
-    player.innerHTML = 
-      <iframe id="ytplayer" width="100%" height="100%" src="${embedUrl}" 
-        frameborder="0" allow="autoplay; encrypted-media" allowfullscreen>
-      </iframe>
-    ;
-    currentIndex = index;
-    syncIdAtual = id;
-    updateSync(id, embedUrl);
-  };
-
-  const renderPlaylist = () => {
-    const container = document.getElementById('playlist');
-    container.innerHTML = '';
-
-    playlist.forEach((video, index) => {
-      const item = document.createElement('div');
-      item.className = 'video-item';
-
-      const youtubeId = video.youtube_id.split('/embed/')[1]?.split('?')[0];
-
-      const thumbnail = document.createElement('img');
-      thumbnail.src = https://img.youtube.com/vi/${youtubeId}/default.jpg;
-      thumbnail.className = 'thumbnail';
-
-      const title = document.createElement('div');
-      title.className = 'title';
-      title.innerText = video.title || 'Vídeo';
-
-      item.onclick = () => setVideo(video.youtube_id, index, video.id);
-
-      item.appendChild(thumbnail);
-      item.appendChild(title);
-      container.appendChild(item);
-    });
-  };
-
-  const playNext = () => {
-    if (playlist.length === 0) return;
-    const nextIndex = (currentIndex + 1) % playlist.length;
-    const nextVideo = playlist[nextIndex];
-    setVideo(nextVideo.youtube_id, nextIndex, nextVideo.id);
-  };
-
-  const syncChecker = async () => {
-    const data = await fetchSync();
-    if (data && data.syncid !== syncIdAtual) {
-      const video = playlist.find(v => v.id === data.syncid);
-      if (video) {
-        const index = playlist.findIndex(v => v.id === data.syncid);
-        setVideo(video.youtube_id, index, video.id);
+      if (playlist.length > 0) {
+        setVideo(playlist[0].youtube_id, 0, playlist[0].id);
       }
-    }
-  };
+    };
 
-  setInterval(syncChecker, 1000);
-  setInterval(updateSyncStatus, 2000); // Checa status a cada 2 segundos
+    // Setup intervals
+    setInterval(syncChecker, 1000);
+    setInterval(updateSyncStatus, 2000);
 
-  const loadApp = async () => {
-    playlist = await fetchVideos();
-    renderPlaylist();
-
-    const sync = await fetchSync();
-    if (sync) {
-      const video = playlist.find(v => v.id === sync.syncid);
-      if (video) {
-        const index = playlist.findIndex(v => v.id === video.id);
-        setVideo(video.youtube_id, index, video.id);
-        return;
-      }
-    }
-
-    if (playlist.length > 0) {
-      setVideo(playlist[0].youtube_id, 0, playlist[0].id);
-    }
-  };
-
-  loadApp();
-</script>
+    loadApp();
+  </script>
 </body>
-</html>
