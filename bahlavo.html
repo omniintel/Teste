@@ -40,6 +40,56 @@
     .video-item:hover { transform: scale(1.03); }
     .thumbnail { width: 100%; border-radius: 4px; }
     .title { margin-top: 5px; font-size: 14px; color: #ddd; }
+
+        #clockContainer {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 1.5vw;
+      backdrop-filter: blur(6px);
+      padding: 1rem 2rem;
+      text-align: center;
+    }
+    #dateText {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    #timeText {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .timeDigit {
+      width: 60px;
+      height: 90px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid rgba(255,255,255,0.3);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2rem;
+    }
+    .flip {
+      animation: flipDown 0.5s ease-in-out;
+    }
+    @keyframes flipDown {
+      0% { transform: rotateX(-90deg); opacity: 0; }
+      100% { transform: rotateX(0deg); opacity: 1; }
+    }
+
+       #weatherBox {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(6px);
+      border-radius: 1.2vw;
+      padding: 1rem 2rem;
+      text-align: center;
+    }
+    #weatherBox .emoji {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    #weatherBox .temperature {
+      font-size: 2.5rem;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -48,6 +98,16 @@
     <div id="video-info"></div>
   </div>
   <div id="playlist"></div>
+
+    <div id="clockContainer">
+    <div id="dateText">Carregando data...</div>
+    <div id="timeText"></div>
+  </div>
+
+    <div id="weatherBox">
+    <div class="emoji">⏳ Carregando...</div>
+    <div class="temperature">--</div>
+  </div>
 
   <script src="https://www.youtube.com/iframe_api"></script>
   <script>
@@ -191,6 +251,70 @@
         setVideo(0);
       }
     };
+
+        let previousTime = '';
+    function updateClock() {
+      const dateEl = document.getElementById('dateText');
+      const timeContainer = document.getElementById('timeText');
+      const now = new Date();
+
+      const options = { weekday: 'long', day: 'numeric', month: 'long' };
+      dateEl.textContent = now.toLocaleDateString('pt-BR', options);
+
+      const timeStr = now.toTimeString().slice(0, 8);
+      const previousChars = previousTime.split('');
+      const currentChars = timeStr.split('');
+
+      if (timeContainer.children.length !== currentChars.length) {
+        timeContainer.innerHTML = '';
+        currentChars.forEach(char => {
+          const span = document.createElement('div');
+          span.className = 'timeDigit';
+          span.textContent = char;
+          timeContainer.appendChild(span);
+        });
+      } else {
+        currentChars.forEach((char, i) => {
+          const digitEl = timeContainer.children[i];
+          if (digitEl.textContent !== char) {
+            digitEl.classList.remove('flip');
+            void digitEl.offsetWidth;
+            digitEl.classList.add('flip');
+            digitEl.textContent = char;
+          }
+        });
+      }
+      previousTime = timeStr;
+    }
+        async function updateWeather() {
+      const apiKey = '0aeb1d92eb76b16aed4cde075eeb9955'; // sua chave
+      const cidade = 'Santa Rosa,BR';
+      const url = `https://api.openweathermap.org/data/2.5/weather?q=${cidade}&units=metric&lang=pt_br&appid=${apiKey}`;
+      const box = document.getElementById('weatherBox');
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const temp = Math.round(data.main.temp);
+        const main = data.weather[0].main.toLowerCase();
+
+        const emojiMap = {
+          clear: '☀️', clouds: '☁️', rain: '🌧️',
+          drizzle: '🌦️', thunderstorm: '⛈️',
+          snow: '❄️', mist: '🌫️', fog: '🌁'
+        };
+
+        const emoji = emojiMap[main] || '🌈';
+        box.querySelector('.emoji').textContent = `${emoji} - Santa Rosa`;
+        box.querySelector('.temperature').textContent = `${temp}°`;
+      } catch (e) {
+        box.querySelector('.emoji').textContent = "⚠️ Erro ao obter clima";
+        box.querySelector('.temperature').textContent = "--";
+      }
+    }
+    updateWeather();
+    setInterval(updateWeather, 600000); // atualiza a cada 10 min
+    setInterval(updateClock, 1000);
+    updateClock();
 
     // === INTERVALOS ===
     setInterval(syncChecker, 1000);
