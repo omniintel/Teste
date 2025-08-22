@@ -403,6 +403,46 @@ function onYouTubeIframeAPIReady() {
       }
     }
 
+    // === Atualização da Playlist via Botão (Button no Supabase) ===
+const updateButtonState = async (value) => {
+  await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1`, {
+    method: 'PATCH',
+    headers: { 
+      apikey: supabaseKey, 
+      Authorization: `Bearer ${supabaseKey}`, 
+      'Content-Type': 'application/json' 
+    },
+    body: JSON.stringify({ Button: value })
+  });
+};
+
+const checkButtonStatus = async () => {
+  const res = await fetch(`${supabaseUrl}/rest/v1/${syncTable}?id=eq.1&select=Button`, {
+    headers: { 
+      apikey: supabaseKey, 
+      Authorization: `Bearer ${supabaseKey}` 
+    }
+  });
+  const data = await res.json();
+  return data.length > 0 ? data[0].Button : null;
+};
+
+const updateSyncStatus = async () => {
+  const statusEl = document.getElementById('sync-status');
+  const buttonStatus = await checkButtonStatus();
+
+  if (buttonStatus === 1) {
+    statusEl.innerText = '🔄 Atualizando Playlist...';
+    await updateButtonState(0);
+    await reloadPlaylist(); // recarrega a playlist
+  } else {
+    statusEl.innerText = '✅ Playlist Atualizada';
+  }
+};
+
+// no final do código, adicionar o intervalo:
+setInterval(updateSyncStatus, 100); // checa a cada 1 segundo
+
     // === INTERVALOS ===
     setInterval(syncChecker, 1000);      // sincronização de vídeo (mantido)
     setInterval(updateClock, 1000);      // relógio
