@@ -181,6 +181,17 @@
       return data.length > 0 ? data[0] : null;
     };
 
+    const updateSyncStatus = async () => {
+  const buttonStatus = await checkButtonStatus();
+
+  if (buttonStatus === 1) {
+    await updateButtonState(0);
+    await reloadPlaylist();
+    console.log("🔄 Playlist recarregada!");
+  }
+};
+
+
     // === INTERFACE ===
     const renderPlaylist = () => {
       const container = document.getElementById('playlist');
